@@ -1,0 +1,66 @@
+name: CI - Backend + Frontend + Coverage
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: demo_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      # Checkout del repo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Backend ---------------------------------------------------------
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build & test backend (Maven)
+        working-directory: ./backend
+        run: mvn -B clean verify
+
+      # Frontend ---------------------------------------------------------
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run frontend tests + coverage (Vitest)
+        working-directory: ./frontend
+        run: npm run test:unit
+
+      # Subir coverage a Codecov -----------------------------------------
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}  # En Codecov → Settings → Repo → Token
+          files: |
+            backend/target/site/jacoco/jacoco.xml
+            frontend/coverage/lcov.info
+          fail_ci_if_error: false
